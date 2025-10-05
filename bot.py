@@ -4,7 +4,7 @@ import random
 from collections import defaultdict
 import sqlite3
 # Bot token va admin ID
-BOT_TOKEN = "7904634489:AAEkhLW00VLlebw0lc82Qa3Vs3TqIq4pI_w"
+BOT_TOKEN = "8197561600:AAFuSJvr-yatdo-F_MbkX4q3wEiFESnxdyw"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -33,33 +33,20 @@ conn.commit()
 
 
 
-
+# Kantoralar rasmlari
+kantora_images = {
+    "1xbet": ["xbet1.jpg", "xbet2.jpg"],
+    "Linebet": ["linebet1.jpg", "linebet2.jpg"],
+    "Winwin": ["winwin1.jpg", "winwin2.jpg"],
+    "Dbbet": ["dbbet1.jpg", "dbbet2.jpg"]
+}
 
 # Random signal rasmlar
-# signal_images = ["rasm1.jpg", "rasm2.jpg", "rasm3.jpg", "rasm4.jpg", "rasm5.jpg"]
+signal_images = ["rasm1.jpg", "rasm2.jpg", "rasm3.jpg", "rasm4.jpg", "rasm5.jpg"]
 
 # Foydalanuvchi tanlagan kantorani saqlash
 user_choices = {}
 waiting_for_photos = set()
-
-# ==== Kantoralar rasmlari ====
-kantora_images = {
-    "DbBet": ["dbbet1.jpg", "dbbet2.jpg"],
-    "Betwinner": ["betwinner1.jpg", "betwinner2.jpg"],
-    "Mosbet": ["mosbet1.jpg"],   # faqat 1 ta rasm
-    "1xbet": ["xbet1.jpg", "xbet2.jpg"],
-    "Melbet": ["melbet1.jpg", "melbet2.jpg"]
-}
-
-# ==== Har bir kantoraga alohida link ====
-kantora_links = {
-    "DbBet": "https://t.me/SOFT_BONUS/20",
-    "Betwinner": "https://t.me/SOFT_BONUS/14",
-    "Mosbet": "https://t.me/SOFT_BONUS/18",
-    "1xbet": "https://t.me/SOFT_BONUS/19",
-    "Melbet": "https://t.me/SOFT_BONUS/6"
-}
-
 
 # ==== Kantora tanlash menyusi ====
 def show_kantora_menu(chat_id):
@@ -69,25 +56,21 @@ def show_kantora_menu(chat_id):
         bot.send_message(chat_id, "🚫 Siz botdan bloklangansiz!\n\n❌ Kantora tanlash mumkin emas.")
         return
 
+    # Agar bloklanmagan bo‘lsa menyuni chiqaramiz
     markup = InlineKeyboardMarkup()
     markup.row(
-        InlineKeyboardButton("🟢 Db Bet", callback_data="kantora_DbBet"),
-        InlineKeyboardButton("🟣 Betwinner", callback_data="kantora_Betwinner")
+        InlineKeyboardButton("🔵1xbet", callback_data="kantora_1xbet"),
+        InlineKeyboardButton("🟢Linebet", callback_data="kantora_Linebet")
     )
     markup.row(
-        InlineKeyboardButton("🟡 Mosbet", callback_data="kantora_Mosbet"),
-        InlineKeyboardButton("🔵 1xbet", callback_data="kantora_1xbet")
+        InlineKeyboardButton("🟢Winwin", callback_data="kantora_Winwin"),
+        InlineKeyboardButton("🔴Dbbet", callback_data="kantora_Dbbet")
     )
-    markup.row(
-        InlineKeyboardButton("🔴 Melbet", callback_data="kantora_Melbet")
-    )
-
     bot.send_message(
         chat_id,
         "✅ Obuna tasdiqlandi!\n\nQuyidagi kantoradan birini tanlang:",
         reply_markup=markup
     )
-
 
 
 # ==== BLOCK tekshiruv funksiyasi ====
@@ -160,7 +143,12 @@ def check_subscription(call):
 from telebot.types import InputMediaPhoto
 
 # Har bir kantoraga alohida link
-
+kantora_links = {
+    "1xbet": "https://t.me/SOFT_BONUS/19",
+    "Linebet": "https://t.me/SOFT_BONUS/7",
+    "Winwin": "https://t.me/SOFT_BONUS/15",
+    "Dbbet": "https://t.me/SOFT_BONUS/13"
+}
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("kantora_"))
 def send_kantora(call):
@@ -183,15 +171,10 @@ def send_kantora(call):
         f"\n\n❗️ESLATMA: 2 ta rasm yuboring va promokodni kiritishni unutmang!"
     )
 
-    imgs = kantora_images[kantora]
-
-    media = []
-    if len(imgs) == 1:
-        media.append(InputMediaPhoto(open(imgs[0], "rb"), caption=caption))
-    else:
-        media.append(InputMediaPhoto(open(imgs[0], "rb"), caption=caption))
-        media.append(InputMediaPhoto(open(imgs[1], "rb")))
-
+    media = [
+        InputMediaPhoto(open(imgs[0], "rb"), caption=caption),
+        InputMediaPhoto(open(imgs[1], "rb"))
+    ]
     bot.send_media_group(call.message.chat.id, media)
 
     link = kantora_links.get(kantora, "https://t.me/SOFT_BONUS")
@@ -211,57 +194,69 @@ user_photos = defaultdict(list)
 # ==== Foydalanuvchi rasm yuborsa ====
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
-    if message.from_user.id in waiting_for_photos:
-        kantora = user_choices.get(message.from_user.id, "Noma'lum")
+    user_id = message.from_user.id
+    username = message.from_user.username or ""   # agar username yo‘q bo‘lsa bo‘sh bo‘ladi
+
+    # 🚫 Agar user bloklangan bo‘lsa → hech narsa ishlamasin
+    if is_blocked(user_id):
+        bot.send_message(message.chat.id, "🚫 Siz botdan bloklangansiz!")
+        return
+
+    # 🚫 Agar username @none bo‘lsa → rasm qabul qilinmaydi
+    if username.lower() == "none":
+        bot.send_message(message.chat.id, "🚫 Sizning profilingizdan rasm qabul qilinmaydi.")
+        return
+
+    # ✅ Faqat kutayotgan foydalanuvchilar uchun ishlaydi
+    if user_id in waiting_for_photos:
+        kantora = user_choices.get(user_id, "Noma'lum")
 
         # Rasmlarni vaqtincha saqlaymiz
-        user_photos[message.from_user.id].append(message.photo[-1].file_id)
+        user_photos[user_id].append(message.photo[-1].file_id)
 
         # Agar 2 ta rasm yig‘ilsa → admin paneliga yuboramiz
-        if len(user_photos[message.from_user.id]) == 2:
-            bot.send_message(message.chat.id,
-                             "✅ Tekshiruv boshlandi.\n⏳ Bu jarayon 5 daqiqadan 24 soatgacha davom etadi.\n\n"
-                             "❗️ Botni bloklamang, aks holda signal ololmaysiz!")
+        if len(user_photos[user_id]) == 2:
+            bot.send_message(
+                message.chat.id,
+                "✅ Tekshiruv boshlandi.\n⏳ Bu jarayon 5 daqiqadan 24 soatgacha davom etadi.\n\n"
+                "❗️ Botni bloklamang, aks holda signal ololmaysiz!"
+            )
 
             caption = (
                 f"📩 Yangi foydalanuvchi rasm yubordi!\n\n"
-                f"👤 User: @{message.from_user.username}\n"
-                f"🆔 ID: {message.from_user.id}\n"
+                f"👤 User: @{username}\n"
+                f"🆔 ID: {user_id}\n"
                 f"🏢 Kantora: {kantora}\n\n"
                 f"👇 Quyida tugmalardan birini tanlang:"
             )
 
             media = [
-                InputMediaPhoto(user_photos[message.from_user.id][0]),
-                InputMediaPhoto(user_photos[message.from_user.id][1], caption=caption)
+                InputMediaPhoto(user_photos[user_id][0]),
+                InputMediaPhoto(user_photos[user_id][1], caption=caption)
             ]
 
             # Rasm guruhini yuboramiz
             bot.send_media_group(ADMIN_ID, media)
 
-            # Tugmalar
-            # ==== Foydalanuvchi rasm yuborganda admin tugmalari ====
+            # Tugmalar (admin uchun)
             markup = InlineKeyboardMarkup()
             markup.row(
-                InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{message.from_user.id}"),
-                InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{message.from_user.id}")
+                InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user_id}"),
+                InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{user_id}")
             )
             markup.add(
-                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{message.from_user.id}")
+                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}")
             )
 
             bot.send_message(ADMIN_ID, "👇 Amaliyotni tanlang:", reply_markup=markup)
 
-            # Tozalab tashlaymiz
-            user_photos[message.from_user.id].clear()
-
-from telebot.types import WebAppInfo
-
-# ==== Signal rasmlari (15 ta) ====
-signal_images = [f"olma{i}.jpg" for i in range(1, 15)]
+            # ✅ Saqlangan rasmlarni tozalaymiz
+            user_photos[user_id].clear()
+    else:
+        # ❌ Kutmagan foydalanuvchi rasm yuborsa javob
+        bot.send_message(message.chat.id, "❌ Siz hozir rasm yubora olmaysiz.")
 
 
-# ==== ADMIN tasdiqlasa ====
 @bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
 def approve_user(call):
     user_id = int(call.data.split("_")[1])
@@ -270,25 +265,12 @@ def approve_user(call):
     if user_id in waiting_for_photos:
         waiting_for_photos.remove(user_id)
 
-    # ✅ Oddiy keyboard tugma
+    # Foydalanuvchiga Signal tugmasi
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("📡 Signal olish"))
-
-    bot.send_message(
-        user_id,
-        "✅ Tekshiruv muvaffaqiyatli yakunlandi!\n📡 Endi '📡 Signal olish' tugmasini bosing va random signal oling:",
-        reply_markup=markup
-    )
+    bot.send_message(user_id, "✅ Tekshiruv muvaffaqiyatli yakunlandi!\n📡 Endi signal olishingiz mumkin:", reply_markup=markup)
 
     bot.answer_callback_query(call.id, "✅ Foydalanuvchi tasdiqlandi!")
-
-
-# ==== Signal tugmasi bosilganda ====
-@bot.message_handler(func=lambda msg: msg.text == "📡 Signal olish")
-def send_signal(message):
-    img = random.choice(signal_images)
-    caption = "📊 Signal olindi! Stavkada yutqazsangiz keyingi stavkani 2 barobar qiling."
-    bot.send_photo(message.chat.id, open(img, "rb"), caption=caption)
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_"))
