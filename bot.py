@@ -4,7 +4,7 @@ import random
 from collections import defaultdict
 import sqlite3
 # Bot token va admin ID
-BOT_TOKEN = "8197561600:AAFuSJvr-yatdo-F_MbkX4q3wEiFESnxdyw"
+BOT_TOKEN = "8197561600:AAFWkPDeqJpA8N1s0s-9FhYFTfv9qe6C9Ic"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -401,4 +401,5 @@ def broadcast_message(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
 
