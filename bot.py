@@ -195,26 +195,23 @@ user_photos = defaultdict(list)
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
     user_id = message.from_user.id
-    username = message.from_user.username or ""   # agar username yo‘q bo‘lsa bo‘sh bo‘ladi
+    username = message.from_user.username or ""
 
-    # 🚫 Agar user bloklangan bo‘lsa → hech narsa ishlamasin
     if is_blocked(user_id):
         bot.send_message(message.chat.id, "🚫 Siz botdan bloklangansiz!")
         return
 
-    # 🚫 Agar username @none bo‘lsa → rasm qabul qilinmaydi
     if username.lower() == "none":
         bot.send_message(message.chat.id, "🚫 Sizning profilingizdan rasm qabul qilinmaydi.")
         return
 
-    # ✅ Faqat kutayotgan foydalanuvchilar uchun ishlaydi
     if user_id in waiting_for_photos:
         kantora = user_choices.get(user_id, "Noma'lum")
 
-        # Rasmlarni vaqtincha saqlaymiz
-        user_photos[user_id].append(message.photo[-1].file_id)
+        # Rasmni vaqtinchalik saqlaymiz (file_id)
+        file_id = message.photo[-1].file_id
+        user_photos[user_id].append(file_id)
 
-        # Agar 2 ta rasm yig‘ilsa → admin paneliga yuboramiz
         if len(user_photos[user_id]) == 2:
             bot.send_message(
                 message.chat.id,
@@ -230,30 +227,25 @@ def handle_photos(message):
                 f"👇 Quyida tugmalardan birini tanlang:"
             )
 
-            media = [
-                InputMediaPhoto(user_photos[user_id][0]),
-                InputMediaPhoto(user_photos[user_id][1], caption=caption)
+            # 🟢 Rasm guruhini to‘g‘ri yuborish
+            media_group = [
+                {"type": "photo", "media": user_photos[user_id][0]},
+                {"type": "photo", "media": user_photos[user_id][1], "caption": caption}
             ]
+            bot.send_media_group(ADMIN_ID, media_group)
 
-            # Rasm guruhini yuboramiz
-            bot.send_media_group(ADMIN_ID, media)
-
-            # Tugmalar (admin uchun)
+            # Tugmalar
             markup = InlineKeyboardMarkup()
             markup.row(
                 InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user_id}"),
                 InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{user_id}")
             )
-            markup.add(
-                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}")
-            )
+            markup.add(InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}"))
 
             bot.send_message(ADMIN_ID, "👇 Amaliyotni tanlang:", reply_markup=markup)
 
-            # ✅ Saqlangan rasmlarni tozalaymiz
             user_photos[user_id].clear()
     else:
-        # ❌ Kutmagan foydalanuvchi rasm yuborsa javob
         bot.send_message(message.chat.id, "❌ Siz hozir rasm yubora olmaysiz.")
 
 
@@ -409,3 +401,4 @@ def broadcast_message(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
