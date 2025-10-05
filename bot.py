@@ -5,7 +5,7 @@ import sqlite3
 from collections import defaultdict
 
 # ==== BOT MA'LUMOTLARI ====
-BOT_TOKEN = "8197561600:AAEL9W4hhqTQzqd-xCdBi2FSeLBy-7u2BzE"
+BOT_TOKEN = "8197561600:AAHw6s4pMd4Nl1JKz40T0WxsRWYeXyXlYkY"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -261,9 +261,19 @@ def block_user(call):
     user_id = int(call.data.split("_")[1])
     cursor.execute("INSERT OR IGNORE INTO blocked_users (user_id) VALUES (?)", (user_id,))
     conn.commit()
-    bot.send_message(user_id, "🚫 Siz botdan bloklandingiz!")
-    bot.answer_callback_query(call.id, "🚫 Foydalanuvchi bloklandi!")
 
+    # 🔴 RAM ichidagi ro‘yxatlardan ham o‘chiramiz
+    waiting_for_photos.discard(user_id)
+    user_photos.pop(user_id, None)
+    user_choices.pop(user_id, None)
+
+    try:
+        bot.send_message(user_id, "🚫 Siz botdan bloklandingiz!")
+    except:
+        pass
+
+    bot.answer_callback_query(call.id, "🚫 Foydalanuvchi bloklandi!")
+    bot.send_message(call.message.chat.id, f"🚫 {user_id} bloklandi va barcha ma’lumotlari tozalandi.")
 
 # ==== SIGNAL YUBORISH ====
 @bot.message_handler(func=lambda msg: msg.text == "📡 Signal olish")
@@ -275,5 +285,6 @@ def send_signal(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
 
 
