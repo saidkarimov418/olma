@@ -4,7 +4,7 @@ import random
 from collections import defaultdict
 import sqlite3
 # Bot token va admin ID
-BOT_TOKEN = "8197561600:AAFWkPDeqJpA8N1s0s-9FhYFTfv9qe6C9Ic"
+BOT_TOKEN = "8197561600:AAF1gy43XPHwS9GenbsA3QviAwt85MZxMfQ"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -195,23 +195,26 @@ user_photos = defaultdict(list)
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
     user_id = message.from_user.id
-    username = message.from_user.username or ""
+    username = message.from_user.username or ""   # agar username yo‘q bo‘lsa bo‘sh bo‘ladi
 
+    # 🚫 Agar user bloklangan bo‘lsa → hech narsa ishlamasin
     if is_blocked(user_id):
         bot.send_message(message.chat.id, "🚫 Siz botdan bloklangansiz!")
         return
 
+    # 🚫 Agar username @none bo‘lsa → rasm qabul qilinmaydi
     if username.lower() == "none":
         bot.send_message(message.chat.id, "🚫 Sizning profilingizdan rasm qabul qilinmaydi.")
         return
 
+    # ✅ Faqat kutayotgan foydalanuvchilar uchun ishlaydi
     if user_id in waiting_for_photos:
         kantora = user_choices.get(user_id, "Noma'lum")
 
-        # Rasmni vaqtinchalik saqlaymiz (file_id)
-        file_id = message.photo[-1].file_id
-        user_photos[user_id].append(file_id)
+        # Rasmlarni vaqtincha saqlaymiz (faqat file_id lar)
+        user_photos[user_id].append(message.photo[-1].file_id)
 
+        # Agar 2 ta rasm yig‘ilsa → admin paneliga yuboramiz
         if len(user_photos[user_id]) == 2:
             bot.send_message(
                 message.chat.id,
@@ -227,25 +230,29 @@ def handle_photos(message):
                 f"👇 Quyida tugmalardan birini tanlang:"
             )
 
-            # 🟢 Rasm guruhini to‘g‘ri yuborish
-            media_group = [
-                {"type": "photo", "media": user_photos[user_id][0]},
-                {"type": "photo", "media": user_photos[user_id][1], "caption": caption}
-            ]
-            bot.send_media_group(ADMIN_ID, media_group)
+            # 🟢 Admin uchun 2 ta rasmni ketma-ket yuboramiz
+            try:
+                bot.send_photo(ADMIN_ID, user_photos[user_id][0])
+                bot.send_photo(ADMIN_ID, user_photos[user_id][1], caption=caption)
+            except Exception as e:
+                bot.send_message(ADMIN_ID, f"⚠️ Rasm yuborishda xatolik: {e}")
 
-            # Tugmalar
+            # 🟢 Tugmalar (admin uchun)
             markup = InlineKeyboardMarkup()
             markup.row(
                 InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user_id}"),
                 InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{user_id}")
             )
-            markup.add(InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}"))
+            markup.add(
+                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}")
+            )
 
             bot.send_message(ADMIN_ID, "👇 Amaliyotni tanlang:", reply_markup=markup)
 
+            # ✅ Saqlangan rasmlarni tozalaymiz
             user_photos[user_id].clear()
     else:
+        # ❌ Kutmagan foydalanuvchi rasm yuborsa javob
         bot.send_message(message.chat.id, "❌ Siz hozir rasm yubora olmaysiz.")
 
 
@@ -401,5 +408,6 @@ def broadcast_message(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
 
 
