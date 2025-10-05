@@ -214,9 +214,40 @@ def handle_photos(message):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
 def approve_user(call):
     user_id = int(call.data.split("_")[1])
-    bot.send_message(user_id, "✅ Tekshiruv muvaffaqiyatli yakunlandi!\n📡 Endi signal olishingiz mumkin!")
-    bot.answer_callback_query(call.id, "✅ Foydalanuvchi tasdiqlandi!")
 
+    # ✅ Foydalanuvchiga signal olish uchun tugma chiqaramiz
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(KeyboardButton("📡 Signal olish"))
+
+    bot.send_message(
+        user_id,
+        "✅ Tekshiruv muvaffaqiyatli yakunlandi!\n\n📡 Endi signal olishingiz mumkin!",
+        reply_markup=markup
+    )
+
+    bot.answer_callback_query(call.id, "✅ Foydalanuvchi tasdiqlandi!")
+    bot.send_message(call.message.chat.id, f"✅ @{call.from_user.username or user_id} foydalanuvchi tasdiqlandi!")
+
+
+# ==== SIGNAL TUGMASI BOSILGANDA ====
+@bot.message_handler(func=lambda message: message.text == "📡 Signal olish")
+def send_signal(message):
+    user_id = message.from_user.id
+
+    # Agar bloklangan bo‘lsa, hech narsa ishlamasin
+    if is_blocked(user_id):
+        bot.send_message(user_id, "🚫 Siz botdan bloklangansiz!")
+        return
+
+    # Tasodifiy rasmni tanlaymiz
+    signal_images = ["rasm1.jpg", "rasm2.jpg", "rasm3.jpg", "rasm4.jpg", "rasm5.jpg"]
+    img = random.choice(signal_images)
+
+    bot.send_photo(
+        message.chat.id,
+        open(img, "rb"),
+        caption="✅ Signal topildi!"
+    )
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_"))
 def cancel_user(call):
@@ -244,4 +275,5 @@ def send_signal(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
 
