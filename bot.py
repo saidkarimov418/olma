@@ -5,7 +5,7 @@ import sqlite3
 from collections import defaultdict
 
 # ==== BOT MA'LUMOTLARI ====
-BOT_TOKEN = "8197561600:AAG4YP-FUfRr0D6wry3qpf68jZa4Ml8-DOU"
+BOT_TOKEN = "8197561600:AAEL9W4hhqTQzqd-xCdBi2FSeLBy-7u2BzE"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -166,49 +166,49 @@ def send_kantora(call):
 # ==== RASM QABUL QILISH ====
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
-    user_id = message.from_user.id
-    username = message.from_user.username or "none"
+    if message.from_user.id in waiting_for_photos:
+        kantora = user_choices.get(message.from_user.id, "Noma'lum")
 
-    if is_blocked(user_id):
-        bot.send_message(user_id, "🚫 Siz botdan bloklangansiz!")
-        return
+        # Rasmlarni vaqtincha saqlaymiz
+        user_photos[message.from_user.id].append(message.photo[-1].file_id)
 
-    if user_id not in waiting_for_photos:
-        bot.send_message(user_id, "❌ Siz hozir rasm yubora olmaysiz.")
-        return
+        # Agar 2 ta rasm yig‘ilsa → admin paneliga yuboramiz
+        if len(user_photos[message.from_user.id]) == 2:
+            bot.send_message(message.chat.id,
+                             "✅ Tekshiruv boshlandi.\n⏳ Bu jarayon 5 daqiqadan 24 soatgacha davom etadi.\n\n"
+                             "❗️ Botni bloklamang, aks holda signal ololmaysiz!")
 
-    photo_id = message.photo[-1].file_id
-    user_photos[user_id].append(photo_id)
+            caption = (
+                f"📩 Yangi foydalanuvchi rasm yubordi!\n\n"
+                f"👤 User: @{message.from_user.username}\n"
+                f"🆔 ID: {message.from_user.id}\n"
+                f"🏢 Kantora: {kantora}\n\n"
+                f"👇 Quyida tugmalardan birini tanlang:"
+            )
 
-    if len(user_photos[user_id]) == 1:
-        cursor.execute("UPDATE user_temp SET photo1=? WHERE user_id=?", (photo_id, user_id))
-    elif len(user_photos[user_id]) == 2:
-        cursor.execute("UPDATE user_temp SET photo2=? WHERE user_id=?", (photo_id, user_id))
-        conn.commit()
+            media = [
+                InputMediaPhoto(user_photos[message.from_user.id][0]),
+                InputMediaPhoto(user_photos[message.from_user.id][1], caption=caption)
+            ]
 
-        bot.send_message(user_id, "✅ Rasmlar qabul qilindi! Tekshiruv jarayoni boshlandi ⏳")
+            # Rasm guruhini yuboramiz
+            bot.send_media_group(ADMIN_ID, media)
 
-        # Ma'lumotni bazadan olamiz
-        cursor.execute("SELECT kantora, photo1, photo2 FROM user_temp WHERE user_id=?", (user_id,))
-        data = cursor.fetchone()
-        if data:
-            kantora, p1, p2 = data
-            caption = f"📩 Yangi foydalanuvchi!\n👤 @{username}\n🆔 {user_id}\n🏢 Kantora: {kantora}"
-
-            bot.send_photo(ADMIN_ID, p1)
-            bot.send_photo(ADMIN_ID, p2, caption=caption)
-
+            # Tugmalar
+            # ==== Foydalanuvchi rasm yuborganda admin tugmalari ====
             markup = InlineKeyboardMarkup()
             markup.row(
-                InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user_id}"),
-                InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{user_id}")
+                InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{message.from_user.id}"),
+                InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{message.from_user.id}")
             )
-            markup.add(InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}"))
+            markup.add(
+                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{message.from_user.id}")
+            )
+
             bot.send_message(ADMIN_ID, "👇 Amaliyotni tanlang:", reply_markup=markup)
 
-        waiting_for_photos.discard(user_id)
-        user_photos[user_id].clear()
-
+            # Tozalab tashlaymiz
+            user_photos[message.from_user.id].clear()
 
 # ==== ADMIN CALLBACKLAR ====
 @bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
@@ -244,3 +244,4 @@ def send_signal(message):
 
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
+
