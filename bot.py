@@ -1,10 +1,11 @@
 import telebot
-from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, InputMediaPhoto
 import random
-from collections import defaultdict
 import sqlite3
-# Bot token va admin ID
-BOT_TOKEN = "8197561600:AAF1gy43XPHwS9GenbsA3QviAwt85MZxMfQ"
+from collections import defaultdict
+
+# ==== BOT MA'LUMOTLARI ====
+BOT_TOKEN = "8197561600:AAEKFiF2zSUcJiv2ygMBV_-zDGgXly4EtJY"
 ADMIN_ID = 7584639843
 CHANNEL_USERNAME = "@SOFT_BET1"
 
@@ -21,19 +22,24 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT
 )
 """)
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS blocked_users (
     user_id INTEGER PRIMARY KEY
 )
 """)
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS user_temp (
+    user_id INTEGER PRIMARY KEY,
+    kantora TEXT,
+    photo1 TEXT,
+    photo2 TEXT
+)
+""")
 conn.commit()
 
-conn.commit()
-
-
-
-
-# Kantoralar rasmlari
+# ==== KANTORA RASMLARI ====
 kantora_images = {
     "1xbet": ["xbet1.jpg", "xbet2.jpg"],
     "Linebet": ["linebet1.jpg", "linebet2.jpg"],
@@ -41,57 +47,57 @@ kantora_images = {
     "Dbbet": ["dbbet1.jpg", "dbbet2.jpg"]
 }
 
-# Random signal rasmlar
+# ==== SIGNAL RASMLARI ====
 signal_images = ["rasm1.jpg", "rasm2.jpg", "rasm3.jpg", "rasm4.jpg", "rasm5.jpg"]
 
-# Foydalanuvchi tanlagan kantorani saqlash
+# ==== FOYDALANUVCHI HOLATLARI ====
 user_choices = {}
 waiting_for_photos = set()
+user_photos = defaultdict(list)
+broadcast_mode = {}
 
-# ==== Kantora tanlash menyusi ====
-def show_kantora_menu(chat_id):
-    # Avval block qilinganmi tekshiramiz
-    cursor.execute("SELECT 1 FROM blocked_users WHERE user_id = ?", (chat_id,))
-    if cursor.fetchone():
-        bot.send_message(chat_id, "🚫 Siz botdan bloklangansiz!\n\n❌ Kantora tanlash mumkin emas.")
-        return
+# ==== LINKLAR ====
+kantora_links = {
+    "1xbet": "https://t.me/SOFT_BONUS/19",
+    "Linebet": "https://t.me/SOFT_BONUS/7",
+    "Winwin": "https://t.me/SOFT_BONUS/15",
+    "Dbbet": "https://t.me/SOFT_BONUS/13"
+}
 
-    # Agar bloklanmagan bo‘lsa menyuni chiqaramiz
-    markup = InlineKeyboardMarkup()
-    markup.row(
-        InlineKeyboardButton("🔵1xbet", callback_data="kantora_1xbet"),
-        InlineKeyboardButton("🟢Linebet", callback_data="kantora_Linebet")
-    )
-    markup.row(
-        InlineKeyboardButton("🟢Winwin", callback_data="kantora_Winwin"),
-        InlineKeyboardButton("🔴Dbbet", callback_data="kantora_Dbbet")
-    )
-    bot.send_message(
-        chat_id,
-        "✅ Obuna tasdiqlandi!\n\nQuyidagi kantoradan birini tanlang:",
-        reply_markup=markup
-    )
-
-
-# ==== BLOCK tekshiruv funksiyasi ====
+# ==== BLOCK TEKSHIRISH ====
 def is_blocked(user_id):
     cursor.execute("SELECT 1 FROM blocked_users WHERE user_id=?", (user_id,))
     return cursor.fetchone() is not None
 
+# ==== KANTORA MENYUSI ====
+def show_kantora_menu(chat_id):
+    cursor.execute("SELECT 1 FROM blocked_users WHERE user_id = ?", (chat_id,))
+    if cursor.fetchone():
+        bot.send_message(chat_id, "🚫 Siz botdan bloklangansiz!\n❌ Kantora tanlash mumkin emas.")
+        return
 
-# ==== START komandasi ====
+    markup = InlineKeyboardMarkup()
+    markup.row(
+        InlineKeyboardButton("🔵 1xbet", callback_data="kantora_1xbet"),
+        InlineKeyboardButton("🟢 Linebet", callback_data="kantora_Linebet")
+    )
+    markup.row(
+        InlineKeyboardButton("🟢 Winwin", callback_data="kantora_Winwin"),
+        InlineKeyboardButton("🔴 Dbbet", callback_data="kantora_Dbbet")
+    )
+    bot.send_message(chat_id, "✅ Obuna tasdiqlandi!\nQuyidagi kantoradan birini tanlang:", reply_markup=markup)
+
+# ==== START ====
 @bot.message_handler(commands=['start'])
 def start_message(message):
     user_id = message.from_user.id
     first_name = message.from_user.first_name
     username = message.from_user.username
 
-    # 🚫 Agar user block qilingan bo‘lsa → hech narsa ishlamasin
     if is_blocked(user_id):
         bot.send_message(message.chat.id, "🚫 Siz botdan bloklangansiz.")
         return
 
-    # ✅ Agar user bazada bo‘lmasa → qo‘shib qo‘yamiz
     cursor.execute(
         "INSERT OR IGNORE INTO users (user_id, first_name, username) VALUES (?, ?, ?)",
         (user_id, first_name, username)
@@ -99,33 +105,22 @@ def start_message(message):
     conn.commit()
 
     try:
-        # 🔍 Kanalga obuna bo‘lganini tekshiramiz
         status = bot.get_chat_member(CHANNEL_USERNAME, user_id).status
         if status in ["member", "administrator", "creator"]:
             show_kantora_menu(message.chat.id)
         else:
             markup = InlineKeyboardMarkup()
-            markup.add(
-                InlineKeyboardButton("📢 Kanal", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")
-            )
-            markup.add(
-                InlineKeyboardButton("✅ Obunani tasdiqlash", callback_data="check_sub")
-            )
-            text = (
-                "🚫 *Quyidagi kanalimizga obuna bo'ling.*\n\n"
-                "A'zo bo‘lib '✅ Obunani tasdiqlash' tugmasini bosing, "
-                "shunda botdan to‘liq foydalanishingiz mumkin."
-            )
+            markup.add(InlineKeyboardButton("📢 Kanal", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"))
+            markup.add(InlineKeyboardButton("✅ Obunani tasdiqlash", callback_data="check_sub"))
             bot.send_message(
                 message.chat.id,
-                text,
-                reply_markup=markup,
-                parse_mode="Markdown"
+                "🚫 Quyidagi kanalga obuna bo‘ling va tasdiqlang:",
+                reply_markup=markup
             )
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Kanal topilmadi yoki yopiq!\n\n{e}")
+        bot.send_message(message.chat.id, f"❌ Kanalni tekshirib bo‘lmadi:\n{e}")
 
-# ==== Obunani tekshirish ====
+# ==== OBUNA TEKSHIRISH ====
 @bot.callback_query_handler(func=lambda call: call.data == "check_sub")
 def check_subscription(call):
     try:
@@ -136,182 +131,131 @@ def check_subscription(call):
         else:
             bot.answer_callback_query(call.id, "❌ Avval kanalga obuna bo‘ling!", show_alert=True)
     except:
-        bot.answer_callback_query(call.id, "❌ Kanal topilmadi yoki yopiq!", show_alert=True)
+        bot.answer_callback_query(call.id, "⚠️ Kanal topilmadi!", show_alert=True)
 
-
-# ==== Kantora tanlash ====
-from telebot.types import InputMediaPhoto
-
-# Har bir kantoraga alohida link
-kantora_links = {
-    "1xbet": "https://t.me/SOFT_BONUS/19",
-    "Linebet": "https://t.me/SOFT_BONUS/7",
-    "Winwin": "https://t.me/SOFT_BONUS/15",
-    "Dbbet": "https://t.me/SOFT_BONUS/13"
-}
-
+# ==== KANTORA TANLASH ====
 @bot.callback_query_handler(func=lambda call: call.data.startswith("kantora_"))
 def send_kantora(call):
     user_id = call.from_user.id
-
-    # 🚫 Agar blokda bo‘lsa → hech narsa qilmaymiz
     if is_blocked(user_id):
         bot.answer_callback_query(call.id, "🚫 Siz botdan bloklangansiz!", show_alert=True)
         return
 
     kantora = call.data.split("_")[1]
     user_choices[user_id] = kantora
+
+    cursor.execute("INSERT OR REPLACE INTO user_temp (user_id, kantora) VALUES (?, ?)", (user_id, kantora))
+    conn.commit()
+
     imgs = kantora_images[kantora]
-
     caption = (
-        f"📌 {kantora} 'Apple Of Fortune' o'yinida siz uchun mahsus SIGNAL tayyorlashim uchun...\n\n"
-        f"Mahsus LINK orqali APKni yuklab oling va ro‘yxatdan o‘ting.\n\n"
-        f"❗️Eski akkaunt ishlamaydi, faqat yangi ro‘yxatdan o‘tganlarga signal to‘g‘ri ko‘rsatadi!\n\n"
-        f"1. Ro‘yxatdan o‘tishda 'rasm'dagi promocodni kiriting.\n\n❗️Minimal depozit 10 ming so'm"
-        f"\n\n❗️ESLATMA: 2 ta rasm yuboring va promokodni kiritishni unutmang!"
+        f"📌 {kantora} 'Apple Of Fortune' uchun signal olish uchun:\n\n"
+        "1️⃣ Maxsus APK orqali ro‘yxatdan o‘ting.\n"
+        "2️⃣ Promokodni kiriting.\n"
+        "3️⃣ 2 ta rasm yuboring (promokod bilan ekran)."
     )
-
-    media = [
-        InputMediaPhoto(open(imgs[0], "rb"), caption=caption),
-        InputMediaPhoto(open(imgs[1], "rb"))
-    ]
-    bot.send_media_group(call.message.chat.id, media)
+    bot.send_photo(call.message.chat.id, open(imgs[0], "rb"), caption=caption)
+    bot.send_photo(call.message.chat.id, open(imgs[1], "rb"))
 
     link = kantora_links.get(kantora, "https://t.me/SOFT_BONUS")
-
     markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Ro‘yxatdan o‘tish", url=link))
-    bot.send_message(call.message.chat.id, "Maxsus apk orqali ro‘yxatdan o‘ting 👇", reply_markup=markup)
+    markup.add(InlineKeyboardButton("📲 Ro‘yxatdan o‘tish", url=link))
+    bot.send_message(call.message.chat.id, "👇 Quyidagi havolani bosing:", reply_markup=markup)
 
     waiting_for_photos.add(user_id)
 
-
-
-# ==== Foydalanuvchi rasm yuborsa ====
-user_photos = defaultdict(list)
-
-
-# ==== Foydalanuvchi rasm yuborsa ====
+# ==== FOYDALANUVCHI RASM YUBORSA ====
 @bot.message_handler(content_types=['photo'])
 def handle_photos(message):
     user_id = message.from_user.id
-    username = message.from_user.username or ""   # agar username yo‘q bo‘lsa bo‘sh bo‘ladi
+    username = message.from_user.username or ""
 
-    # 🚫 Agar user bloklangan bo‘lsa → hech narsa ishlamasin
     if is_blocked(user_id):
         bot.send_message(message.chat.id, "🚫 Siz botdan bloklangansiz!")
         return
 
-    # 🚫 Agar username @none bo‘lsa → rasm qabul qilinmaydi
     if username.lower() == "none":
-        bot.send_message(message.chat.id, "🚫 Sizning profilingizdan rasm qabul qilinmaydi.")
+        bot.send_message(message.chat.id, "❌ Profilingizda username yo‘q! @username qo‘shing.")
         return
 
-    # ✅ Faqat kutayotgan foydalanuvchilar uchun ishlaydi
     if user_id in waiting_for_photos:
-        kantora = user_choices.get(user_id, "Noma'lum")
+        file_id = message.photo[-1].file_id
+        user_photos[user_id].append(file_id)
 
-        # Rasmlarni vaqtincha saqlaymiz (faqat file_id lar)
-        user_photos[user_id].append(message.photo[-1].file_id)
+        # DB ga yozamiz
+        cursor.execute("SELECT photo1, photo2 FROM user_temp WHERE user_id=?", (user_id,))
+        row = cursor.fetchone()
 
-        # Agar 2 ta rasm yig‘ilsa → admin paneliga yuboramiz
-        if len(user_photos[user_id]) == 2:
-            bot.send_message(
-                message.chat.id,
-                "✅ Tekshiruv boshlandi.\n⏳ Bu jarayon 5 daqiqadan 24 soatgacha davom etadi.\n\n"
-                "❗️ Botni bloklamang, aks holda signal ololmaysiz!"
-            )
+        if not row:
+            cursor.execute("INSERT INTO user_temp (user_id, photo1) VALUES (?, ?)", (user_id, file_id))
+        elif row[0] is None:
+            cursor.execute("UPDATE user_temp SET photo1=? WHERE user_id=?", (file_id, user_id))
+        elif row[1] is None:
+            cursor.execute("UPDATE user_temp SET photo2=? WHERE user_id=?", (file_id, user_id))
+        conn.commit()
 
+        # Agar 2 ta rasm bo‘lsa
+        cursor.execute("SELECT kantora, photo1, photo2 FROM user_temp WHERE user_id=?", (user_id,))
+        kantora, p1, p2 = cursor.fetchone()
+
+        if p1 and p2:
+            bot.send_message(message.chat.id, "✅ Tekshiruv boshlandi. Javob 5 daqiqa – 24 soat ichida keladi.")
             caption = (
-                f"📩 Yangi foydalanuvchi rasm yubordi!\n\n"
-                f"👤 User: @{username}\n"
-                f"🆔 ID: {user_id}\n"
-                f"🏢 Kantora: {kantora}\n\n"
-                f"👇 Quyida tugmalardan birini tanlang:"
+                f"📩 Yangi foydalanuvchi!\n\n"
+                f"👤 @{username}\n🆔 {user_id}\n🏢 Kantora: {kantora}\n\n👇 Tanlang:"
             )
+            bot.send_photo(ADMIN_ID, p1)
+            bot.send_photo(ADMIN_ID, p2, caption=caption)
 
-            # 🟢 Admin uchun 2 ta rasmni ketma-ket yuboramiz
-            try:
-                bot.send_photo(ADMIN_ID, user_photos[user_id][0])
-                bot.send_photo(ADMIN_ID, user_photos[user_id][1], caption=caption)
-            except Exception as e:
-                bot.send_message(ADMIN_ID, f"⚠️ Rasm yuborishda xatolik: {e}")
-
-            # 🟢 Tugmalar (admin uchun)
             markup = InlineKeyboardMarkup()
             markup.row(
                 InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"approve_{user_id}"),
                 InlineKeyboardButton("❌ Bekor qilish", callback_data=f"cancel_{user_id}")
             )
-            markup.add(
-                InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}")
-            )
+            markup.add(InlineKeyboardButton("🚫 Block qilish", callback_data=f"block_{user_id}"))
+            bot.send_message(ADMIN_ID, "👇 Harakatni tanlang:", reply_markup=markup)
 
-            bot.send_message(ADMIN_ID, "👇 Amaliyotni tanlang:", reply_markup=markup)
-
-            # ✅ Saqlangan rasmlarni tozalaymiz
+            cursor.execute("DELETE FROM user_temp WHERE user_id=?", (user_id,))
+            conn.commit()
             user_photos[user_id].clear()
     else:
-        # ❌ Kutmagan foydalanuvchi rasm yuborsa javob
-        bot.send_message(message.chat.id, "❌ Siz hozir rasm yubora olmaysiz.")
+        bot.send_message(message.chat.id, "❌ Hozir rasm yubora olmaysiz.")
 
-
+# ==== ADMIN CALLBACKLAR ====
 @bot.callback_query_handler(func=lambda call: call.data.startswith("approve_"))
 def approve_user(call):
     user_id = int(call.data.split("_")[1])
-
-    # Foydalanuvchini kutish ro‘yxatidan o‘chiramiz
     if user_id in waiting_for_photos:
         waiting_for_photos.remove(user_id)
-
-    # Foydalanuvchiga Signal tugmasi
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("📡 Signal olish"))
-    bot.send_message(user_id, "✅ Tekshiruv muvaffaqiyatli yakunlandi!\n📡 Endi signal olishingiz mumkin:", reply_markup=markup)
-
+    bot.send_message(user_id, "✅ Tasdiqlandi! Endi signal olishingiz mumkin.", reply_markup=markup)
     bot.answer_callback_query(call.id, "✅ Foydalanuvchi tasdiqlandi!")
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("cancel_"))
 def cancel_user(call):
     user_id = int(call.data.split("_")[1])
-
-    # Kutishdan o‘chiramiz
-    if user_id in waiting_for_photos:
-        waiting_for_photos.remove(user_id)
-
+    waiting_for_photos.discard(user_id)
     bot.send_message(user_id, "❌ So‘rovingiz bekor qilindi.")
-    bot.answer_callback_query(call.id, "❌ So‘rov bekor qilindi!")
-
+    bot.answer_callback_query(call.id, "❌ Bekor qilindi!")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("block_"))
 def block_user(call):
     user_id = int(call.data.split("_")[1])
-
-    # Kutishdan o‘chiramiz
-    if user_id in waiting_for_photos:
-        waiting_for_photos.remove(user_id)
-
-    # Block jadvaliga qo‘shamiz
+    waiting_for_photos.discard(user_id)
     cursor.execute("INSERT OR IGNORE INTO blocked_users (user_id) VALUES (?)", (user_id,))
     conn.commit()
-
     try:
-        bot.send_message(user_id, "🚫 Siz botdan bloklandingiz! Endi hech qanday funksiyadan foydalana olmaysiz.")
+        bot.send_message(user_id, "🚫 Siz bloklandingiz!")
     except:
         pass
-
     bot.answer_callback_query(call.id, "🚫 Foydalanuvchi bloklandi!")
 
-
-# ==== Signal tugmasi bosilganda ====
+# ==== SIGNAL OLIB BERISH ====
 @bot.message_handler(func=lambda msg: msg.text == "📡 Signal olish")
 def send_signal(message):
     img = random.choice(signal_images)
-    caption = "📊 Agar stavkada mag‘lubiyat bo‘lsa, keyingi stavkani 2 barobar oshiring!"
-    bot.send_photo(message.chat.id, open(img, "rb"), caption=caption)
-
-
+    bot.send_photo(message.chat.id, open(img, "rb"), caption="📊 Mag‘lubiyatda stavkani 2x qiling!")
 
 # ==== ADMIN PANEL ====
 @bot.message_handler(commands=['admin'])
@@ -322,92 +266,52 @@ def admin_panel(message):
         markup.add("❌ Chiqish")
         bot.send_message(message.chat.id, "🔐 Admin panelga xush kelibsiz!", reply_markup=markup)
 
-
-# ==== Statistika ====
+# ==== STATISTIKA ====
 @bot.message_handler(func=lambda msg: msg.text == "📊 Statistika" and msg.from_user.id == ADMIN_ID)
 def show_stats(message):
-    cursor.execute("SELECT user_id FROM users")
-    users = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM blocked_users")
+    blocked = cursor.fetchone()[0]
+    active = total - blocked
+    bot.send_message(message.chat.id, f"📊 Umumiy: {total}\n✅ Aktiv: {active}\n🚫 Bloklangan: {blocked}")
 
-    total = len(users)
-    active = 0
-    blocked = 0
-
-    for (user_id,) in users:
-        try:
-            bot.send_chat_action(user_id, "typing")
-            active += 1
-        except:
-            blocked += 1
-
-    text = (
-        f"📊 Statistika:\n\n"
-        f"👥 Umumiy foydalanuvchilar: {total}\n"
-        f"✅ Aktiv: {active}\n"
-        f"⛔️ Block qilganlar: {blocked}"
-    )
-    bot.send_message(message.chat.id, text)
-
-
-# ==== Habar yuborish ====
-broadcast_mode = {}
-
-# ✉️ Habar yuborish tugmasi
+# ==== BARCHAGA XABAR ====
 @bot.message_handler(func=lambda msg: msg.text == "✉️ Habar yuborish" and msg.from_user.id == ADMIN_ID)
 def enable_broadcast(message):
     broadcast_mode[message.from_user.id] = True
-    bot.send_message(message.chat.id, "✉️ Yubormoqchi bo‘lgan xabarni kiriting (matn, rasm, video, ovozli, GIF, sticker, hujjat, premium emoji...)")
+    bot.send_message(message.chat.id, "✉️ Yuboriladigan xabarni kiriting (matn, rasm, video va h.k.)")
 
-# Barcha turdagi kontentlarni ushlash
 @bot.message_handler(content_types=['text', 'photo', 'video', 'voice', 'video_note', 'sticker', 'animation', 'document'])
 def broadcast_message(message):
     if message.from_user.id == ADMIN_ID and broadcast_mode.get(message.from_user.id):
         cursor.execute("SELECT user_id FROM users")
         users = cursor.fetchall()
+        sent, failed = 0, 0
 
-        sent = 0
-        failed = 0
-
-        for (user_id,) in users:
+        for (uid,) in users:
             try:
                 if message.content_type == "text":
-                    # Premium emoji ham text sifatida ketadi
-                    bot.send_message(user_id, message.text)
+                    bot.send_message(uid, message.text)
                 elif message.content_type == "photo":
-                    bot.send_photo(user_id, message.photo[-1].file_id, caption=message.caption or "")
+                    bot.send_photo(uid, message.photo[-1].file_id, caption=message.caption or "")
                 elif message.content_type == "video":
-                    bot.send_video(user_id, message.video.file_id, caption=message.caption or "")
+                    bot.send_video(uid, message.video.file_id, caption=message.caption or "")
                 elif message.content_type == "voice":
-                    bot.send_voice(user_id, message.voice.file_id, caption=message.caption or "")
+                    bot.send_voice(uid, message.voice.file_id)
                 elif message.content_type == "video_note":
-                    bot.send_video_note(user_id, message.video_note.file_id)
-                elif message.content_type == "sticker":
-                    bot.send_sticker(user_id, message.sticker.file_id)
+                    bot.send_video_note(uid, message.video_note.file_id)
                 elif message.content_type == "animation":
-                    bot.send_animation(user_id, message.animation.file_id, caption=message.caption or "")
+                    bot.send_animation(uid, message.animation.file_id)
                 elif message.content_type == "document":
-                    bot.send_document(user_id, message.document.file_id, caption=message.caption or "")
+                    bot.send_document(uid, message.document.file_id)
                 sent += 1
-            except Exception as e:
+            except:
                 failed += 1
-                # Xohlasa log qilishingiz mumkin
-                # print(f"Xato {user_id}: {e}")
 
         broadcast_mode[message.from_user.id] = False
-        bot.send_message(
-            message.chat.id,
-            f"✅ Yuborildi: {sent}\n❌ Yetib bormadi: {failed}"
-        )
+        bot.send_message(message.chat.id, f"✅ Yuborildi: {sent}\n❌ Yetmadi: {failed}")
 
-    elif message.from_user.id == ADMIN_ID and message.text == "❌ Chiqish":
-        broadcast_mode[message.from_user.id] = False
-        markup = ReplyKeyboardMarkup(resize_keyboard=True)
-        bot.send_message(message.chat.id, "❌ Admin paneldan chiqdingiz", reply_markup=markup)
-
-
-
+# ==== ISHGA TUSHIRISH ====
 print("🤖 Bot ishga tushdi...")
 bot.infinity_polling()
-
-
-
